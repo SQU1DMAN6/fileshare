@@ -5,7 +5,7 @@ mkdir FileShare
 cd FileShare
 curl https://quanthai.net/fileshare.py -o fileshare.py
 echo "Requires pyinstaller to work"
-pyinstaller --onefile fileshare.py
+pyinstaller --onefile --hidden-import=pkg_resources fileshare.py
 echo -e "===\n\n\nStep 1 done\n\n\n==="
 cd dist
 sudo cp fileshare /usr/bin/

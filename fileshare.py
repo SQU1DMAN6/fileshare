@@ -6,6 +6,8 @@ import requests
 import zipfile
 import subprocess
 from pathlib import Path
+import shutil
+import importlib
 
 BASE_URL = "https://quanthai.net/repos"
 TMP_DIR = "/tmp/fsdl"
@@ -28,21 +30,37 @@ def clean_tempfolder():
     run("sudo rm -rf /tmp/fsdl")
     print("Cleaning complete")
 
-def detect_and_build():
+def detect_and_build(reponame):
     os.chdir(TMP_DIR)
+    py_flags = ""
+
+    # Handle hidden imports for known tricky modules
+    known_hidden_imports = ['pyttsx3', 'pkg_resources.py2_warn', 'engine', 'comtypes', 'dnspython', 'sympy', 'numpy']
+    hidden_imports = [
+        f"--hidden-import={mod}"
+        for mod in known_hidden_imports
+        if importlib.util.find_spec(mod)
+    ]
+    py_flags += " " + " ".join(hidden_imports)
+
     if Path("main.py").exists():
         print("Detected Python app. Building with PyInstaller...")
+
         run("pip install pyinstaller")
-        run("pyinstaller --onefile main.py")
-        return "dist/main"
+        build_cmd = f"pyinstaller --onefile main.py --name {reponame} {py_flags}"
+        run(build_cmd)
+
+        binary_path = Path(TMP_DIR) / "dist" / reponame
+        if binary_path.exists():
+            return str(binary_path)
     elif Path("main.go").exists():
         print("Detected Go app. Building with go build...")
-        run("go build -o app_bin main.go")
-        return "app_bin"
+        run(f"go build -o {reponame} main.go")
+        return reponame
     elif Path("main.cpp").exists():
         print("Detected C++ app. Building with g++...")
-        run("g++ main.cpp -o app_bin")
-        return "app_bin"
+        run(f"g++ main.cpp -o {reponame}")
+        return reponame
     elif Path("Makefile").exists():
         print("Makefile found. Running make...")
         run("make")
@@ -53,12 +71,14 @@ def detect_and_build():
 
 def install_binary(binary_path, reponame):
     bin_name = Path(binary_path).name
+    dest_bin = f"/usr/local/bin/{bin_name}"
+    share_dir = f"/usr/share/{reponame}"
+
     run(f"chmod +x {binary_path}")
-    run(f"sudo cp {binary_path} /usr/local/bin/{bin_name}")
-    run(f"sudo mkdir -p /usr/share/{reponame}/")
-    run(f"sudo cp {binary_path} /usr/share/{reponame}/")
+    run(f"sudo cp {binary_path} {dest_bin}")
+    run(f"sudo mkdir -p {share_dir}")
+    run(f"sudo cp {binary_path} {share_dir}")
     print(f"Installed as '{bin_name}'")
-    run("sudo rm -rf /tmp/fsdl")
 
 def remove_repo(repo_path):
     if "/" in repo_path:
@@ -127,7 +147,7 @@ def get_repo(repo_path, flags):
         subprocess.run([install_script], cwd=TMP_DIR)
     else:
         print("Using automatic language detection...")
-        binary_path = detect_and_build()
+        binary_path = detect_and_build(reponame)
         if binary_path and os.path.exists(binary_path):
             install_binary(binary_path, reponame)
         else:
@@ -149,7 +169,7 @@ Usage:
       Removes installed binary and associated share directory.
 
   fileshare clean
-      Wipes the temporary build directory at /tmp/fsdl.
+      Removes the temporary build directory at /tmp/fsdl.
 
   fileshare --help
       Shows this help message.
