@@ -34,7 +34,6 @@ def detect_and_build(reponame):
     os.chdir(TMP_DIR)
     py_flags = ""
 
-    # Handle hidden imports for known tricky modules
     known_hidden_imports = ['pyttsx3', 'pkg_resources.py2_warn', 'engine', 'comtypes', 'dnspython', 'sympy', 'numpy']
     hidden_imports = [
         f"--hidden-import={mod}"
@@ -47,7 +46,7 @@ def detect_and_build(reponame):
         print("Detected Python app. Building with PyInstaller...")
 
         run("pip install pyinstaller")
-        build_cmd = f"pyinstaller --onefile main.py --name {reponame} {py_flags}"
+        build_cmd = f"sudo pyinstaller --onefile main.py --name {reponame} {py_flags}"
         run(build_cmd)
 
         binary_path = Path(TMP_DIR) / "dist" / reponame
@@ -66,7 +65,7 @@ def detect_and_build(reponame):
         run("make")
         return None
     else:
-        print("No known entry point found. Please consider using --no-unzip or --ignore-default.")
+        print("No known entry point found.")
         return None
 
 def install_binary(binary_path, reponame):
@@ -103,7 +102,6 @@ def remove_repo(repo_path):
 
 def get_repo(repo_path, flags):
     no_unzip = "--no-unzip" in flags
-    ignore_default = "--ignore-default" in flags
 
     print(f"Fetching repo: {repo_path}")
     full_url = f"{BASE_URL}/{repo_path}"
@@ -132,26 +130,34 @@ def get_repo(repo_path, flags):
         print("No files found in repo.")
         sys.exit(1)
 
-    if not no_unzip:
-        for fname in ["main.zip", "app.zip", "root.zip"]:
-            path = os.path.join(TMP_DIR, fname)
-            if os.path.exists(path):
-                extract_zip(path)
+    if no_unzip:
+        print("--no-unzip used. Skipping extraction and install.")
+        return
 
-    install_script = os.path.join(TMP_DIR, "install.sh")
+    for fname in ["main.zip", "app.zip", "root.zip"]:
+        path = os.path.join(TMP_DIR, fname)
+        if os.path.exists(path):
+            extract_zip(path)
+
+    os.chdir(TMP_DIR)
     user, reponame = repo_path.split("/")
 
-    if ignore_default and "install.sh" in downloaded:
-        print("Running install.sh ...")
-        os.chmod(install_script, 0o755)
-        subprocess.run([install_script], cwd=TMP_DIR)
+    # If install.sh is there, run it — skip FS auto-detection
+    if "install.sh" in downloaded:
+        print("install.sh found. Running and skipping default installer...")
+        os.chmod("install.sh", 0o755)
+        result = subprocess.run(["./install.sh"])
+        if result.returncode != 0:
+            print("install.sh failed. Aborting.")
+        return
+
+    # Otherwise, do FS's automatic detection
+    print("No install.sh found. Using automatic build...")
+    binary_path = detect_and_build(reponame)
+    if binary_path and os.path.exists(binary_path):
+        install_binary(binary_path, reponame)
     else:
-        print("Using automatic language detection...")
-        binary_path = detect_and_build(reponame)
-        if binary_path and os.path.exists(binary_path):
-            install_binary(binary_path, reponame)
-        else:
-            print("Build failed or output binary not found.")
+        print("Build failed or binary not found.")
 
     print("Done.")
 
@@ -160,10 +166,9 @@ def print_help():
 fileshare - lightweight universal repo fetcher & builder
 
 Usage:
-  fileshare get <user/repo> [--no-unzip] [--ignore-default]
+  fileshare get <user/repo> [--no-unzip]
       Downloads and installs a repo from quanthai.net.
-      --no-unzip: Skips extracting downloaded zip files.
-      --ignore-default: Runs install.sh if available instead of auto-detect.
+      --no-unzip: Skips extracting and installing — just fetches files into /tmp/fsdl.
 
   fileshare remove <user/repo>
       Removes installed binary and associated share directory.
