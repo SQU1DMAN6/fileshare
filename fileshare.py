@@ -65,7 +65,7 @@ def detect_and_build(reponame):
         run("make")
         return None
     else:
-        print("No known entry point found.")
+        print("No known entry point found. Please consider checking the repository's source.'")
         return None
 
 def install_binary(binary_path, reponame):
@@ -144,7 +144,7 @@ def get_repo(repo_path, flags):
 
     # If install.sh is there, run it — skip FS auto-detection
     if "install.sh" in downloaded:
-        print("install.sh found. Running and skipping default installer...")
+        print("install.sh found. Running and skipping default installer protocol...")
         os.chmod("install.sh", 0o755)
         result = subprocess.run(["./install.sh"])
         if result.returncode != 0:
@@ -152,7 +152,7 @@ def get_repo(repo_path, flags):
         return
 
     # Otherwise, do FS's automatic detection
-    print("No install.sh found. Using automatic build...")
+    print("No install.sh found. Using automatic installer protocol...")
     binary_path = detect_and_build(reponame)
     if binary_path and os.path.exists(binary_path):
         install_binary(binary_path, reponame)
@@ -163,14 +163,14 @@ def get_repo(repo_path, flags):
 
 def print_help():
     print("""
-fileshare - lightweight universal repo fetcher & builder
+FileShare v2, Universal Software Deployer, Written by Quan Thai
 
 Usage:
   fileshare get <user/repo> [--no-unzip]
       Downloads and installs a repo from quanthai.net.
       --no-unzip: Skips extracting and installing — just fetches files into /tmp/fsdl.
 
-  fileshare remove <user/repo>
+  fileshare remove <repo>
       Removes installed binary and associated share directory.
 
   fileshare clean
